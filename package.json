@@ -1,0 +1,40 @@
+{
+  "name": "rent-manager-fe",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite --mode dev --host",
+    "build:qa": "vite build --mode qa",
+    "build": "vite build --mode prd",
+    "serve": "vite preview --mode prd",
+    "lint": "eslint --ext .ts,.tsx,.vue src",
+    "lint:fix": "eslint --ext .ts,.tsx,.vue src --fix"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "html2canvas": "^1.4.1",
+    "localforage": "^1.10.0",
+    "lodash.clonedeep": "^4.5.0",
+    "moment": "^2.30.1",
+    "pinia": "^3.0.2",
+    "scss": "^0.2.4",
+    "uuid": "^11.1.0",
+    "vant": "^4.9.19",
+    "vite": "^6.3.5",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/tsconfig": "^0.7.0",
+    "sass-embedded": "^1.89.1",
+    "typescript": "^5.8.3",
+    "unplugin-vue-components": "^28.7.0",
+    "vue-tsc": "^2.2.10"
+  }
+}
