@@ -1,20 +1,16 @@
 <template>
   <Teleport to="#narBarRight">
-    <van-icon name="plus" class="add-icon" @click="onAdd" />
+    <Icon name="plus" class="add-icon" @click="onAdd" size="large" />
   </Teleport>
-  <List finished-text="没有更多了">
+  <List finished-text="没有更多了" v-if="buildings.length > 0">
     <SwipeCell v-for="item in buildings" :key="item.id">
-      <Cell
-        :title="item.name"
-        is-link
-        to="/room"
-        @click="selectBuilding(item.id)"
-      />
+      <Cell :title="item.name" is-link :to="`/room/${item.id}`" />
       <template #right>
         <Button square type="danger" text="删除" @click="deleteItem(item.id)" />
       </template>
     </SwipeCell>
   </List>
+  <Empty v-else description="暂无楼栋" />
   <Popup
     :show="show"
     @click-overlay="() => (show = false)"
@@ -34,10 +30,12 @@
       </div>
     </Form>
   </Popup>
+  <Footer />
 </template>
 
 <script setup lang="ts">
 import {
+  Icon,
   List,
   Cell,
   SwipeCell,
@@ -46,16 +44,18 @@ import {
   Popup,
   Field,
   CellGroup,
+  Empty,
 } from "vant";
+import Footer from "@/components/Footer/index.vue";
 import { showConfirmDialog } from "vant";
 import { useBuildingStore } from "@/store/buildingStore";
 import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 
+const router = useRouter();
 const buildingStore = useBuildingStore();
 
 const buildings = computed(() => buildingStore.buildingList);
-
-console.log("buildings", buildings);
 
 const show = ref(false);
 
@@ -72,16 +72,10 @@ const onSubmit = () => {
   show.value = false;
 };
 
-const selectBuilding = (id) => {
-  console.log("before:", buildingStore.selectedBuildingId);
-  buildingStore.selectBuilding(id);
-  console.log("after:", buildingStore.selectedBuildingId);
-};
 const deleteItem = (id) => {
   showConfirmDialog({
     title: "提示",
     message: "确定要删除此楼栋吗？",
-    theme: "round-button",
   })
     .then(() => {
       buildingStore.removeBuilding(id);

@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { useBuildingStore } from "./buildingStore";
 import { v4 as uuidv4 } from "uuid";
 import dayjs from "dayjs";
+import { useRentStore } from "./rentStore";
 
 export enum ROOM_STATUS {
   AVAILABLE = "available", // 可用
@@ -20,37 +21,64 @@ export type Room = {
 };
 interface RoomState {
   rooms: Room[];
-  selectedRoomId: string; // 当前选中的房间ID
 }
 
 export const useRoomStore = defineStore("room", {
   state: (): RoomState => ({
     rooms: [],
-    selectedRoomId: "",
   }),
   getters: {
-    selectedRoom(state): Room {
-      return state.rooms.find((b) => b.id === state.selectedRoomId);
+    roomIds(state) {
+      return state.rooms.map((item) => {
+        return item.id;
+      });
     },
-    buildingRooms(state): Room[] {
-      const buildingStore = useBuildingStore();
-      const buildingId = buildingStore.selectedBuildingId;
-      if (!buildingId) {
-        return [];
-      }
-      return state.rooms.filter((r) => r.buildingId === buildingId);
+    getRoomById(state) {
+      return (id: string): Room | undefined => {
+        return state.rooms.find((r) => r.id === id);
+      };
+    },
+    getRoomsByBuildingId(state) {
+      return (id: string): Room[] => {
+        return state.rooms.filter((r) => r.buildingId === id);
+      };
+    },
+    // 获取房间总数量
+    totalRoomsCount(state): number {
+      return state.rooms.length;
+    },
+    // 获取未出租房间数量
+    unOccupiedRoomCount(state): number {
+      return state.rooms.filter((r) => r.status !== ROOM_STATUS.OCCUPIED)
+        .length;
+    },
+    // 获取已出租房间数量
+    occupiedRoomCount(state): number {
+      return state.rooms.filter((r) => r.status === ROOM_STATUS.OCCUPIED)
+        .length;
+    },
+    unbilledRooms: (state) => {
+      const rentStore = useRentStore();
+
+      const billedRoomIds = new Set(
+        rentStore.records
+          .filter((record) => {
+            return (
+              record.endDate > dayjs().subtract(1, "M").format("YYYY-MM-DD")
+            );
+          })
+          .map((record) => record.roomId)
+      );
+
+      const unBilledRooms = state.rooms.filter(
+        (room) => !billedRoomIds.has(room.id) && room.status === "occupied"
+      );
+
+      return unBilledRooms;
     },
   },
   actions: {
-    selectRoom(id: string) {
-      if (!this.rooms.some((r) => r.id === id)) {
-        console.warn(`Room with id ${id} does not exist`);
-      }
-      this.selectedRoomId = id;
-    },
-    addRoom(room: Omit<Room, "id" | "buildingId">) {
-      const buildingStore = useBuildingStore();
-      const buildingId = buildingStore.selectedBuildingId;
+    addRoom(room: Omit<Room, "id" | "buildingId">, buildingId: string) {
       if (!buildingId) {
         throw new Error("No building selected");
       }
@@ -58,21 +86,34 @@ export const useRoomStore = defineStore("room", {
       this.rooms.push({ ...room, id, buildingId });
     },
     removeRoom(id: string) {
+      const rentStore = useRentStore();
       this.rooms = this.rooms.filter((r) => r.id !== id);
+      rentStore.syncByPraent();
     },
-    checkInRoom() {
-      const room = this.selectedRoom;
+    syncByPraent() {
+      const buildingStore = useBuildingStore();
+      const rentStore = useRentStore();
+
+      this.rooms = this.rooms.filter((r) =>
+        buildingStore.buildingIds.includes(r.buildingId)
+      );
+      rentStore.syncByPraent();
+    },
+    checkInRoom(id: string) {
+      const room = this.getRoomById(id);
       if (room && room.status === ROOM_STATUS.AVAILABLE) {
         room.status = ROOM_STATUS.OCCUPIED;
         room.checkInDate = dayjs().format("YYYY-MM-DD HH:mm:ss");
-        room.checkOutDate = null;
+        room.checkOutDate = undefined;
       }
     },
-    checkOutRoom() {
-      const room = this.selectedRoom;
+    checkOutRoom(id: string) {
+      const room = this.getRoomById(id);
+      const rentStore = useRentStore();
       if (room && room.status === ROOM_STATUS.OCCUPIED) {
         room.status = ROOM_STATUS.AVAILABLE;
         room.checkOutDate = dayjs().format("YYYY-MM-DD HH:mm:ss");
+        rentStore.removeRecordByRoom(room.id);
       }
     },
   },

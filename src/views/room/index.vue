@@ -1,20 +1,27 @@
 <template>
-  <Teleport to="#narBarRight">
-    <van-icon name="plus" class="add-icon" @click="onAdd" />
+  <Teleport to="#narBarLeft">
+    <Icon
+      name="arrow-left"
+      class="back-icon"
+      @click.stop.prevent="$router.back()"
+      size="large"
+    />
   </Teleport>
-  <List finished-text="没有更多了">
+
+  <List finished-text="没有更多了" v-if="rooms.length > 0">
     <SwipeCell v-for="item in rooms" :key="item.id">
-      <Cell
-        :title="item.code"
-        is-link
-        to="/rent"
-        @click="selectRoom(item.id)"
-      />
+      <Cell :title="item.code" is-link :to="`/rent/${item.id}`" />
       <template #right>
         <Button square type="danger" text="删除" @click="deleteItem(item)" />
       </template>
     </SwipeCell>
   </List>
+  <Empty v-else description="暂无房间" />
+
+  <ActionBar placeholder v-if="queryType !== 'unbilled'">
+    <ActionBarButton type="primary" @click="onAdd()" text="新增房间" />
+  </ActionBar>
+
   <Popup
     :show="show"
     @click-overlay="() => (show = false)"
@@ -46,14 +53,27 @@ import {
   Popup,
   Field,
   CellGroup,
+  Empty,
+  Icon,
+  ActionBar,
+  ActionBarButton,
 } from "vant";
 import { showConfirmDialog } from "vant";
 import { Room, ROOM_STATUS, useRoomStore } from "@/store/roomStore";
 import { computed, ref } from "vue";
+import { useRoute } from "vue-router";
 
+const route = useRoute();
 const roomStore = useRoomStore();
+const queryType = computed(() => route.query.type);
+const buildingId = computed(() => route.params.buildId as string);
 
-const rooms = computed(() => roomStore.buildingRooms);
+const rooms = computed(() => {
+  if (queryType.value === "unbilled") {
+    return roomStore.unbilledRooms;
+  }
+  return roomStore.getRoomsByBuildingId(buildingId.value);
+});
 
 const show = ref(false);
 
@@ -67,22 +87,16 @@ const onAdd = () => {
 };
 
 const onSubmit = () => {
-  roomStore.addRoom(room.value);
+  roomStore.addRoom(room.value, buildingId.value);
   room.value.code = "";
 
   show.value = false;
 };
 
-const selectRoom = (id: string) => {
-  console.log("selectRoom", id);
-
-  roomStore.selectRoom(id);
-};
 const deleteItem = (item: { id: string }) => {
   showConfirmDialog({
     title: "提示",
     message: "确定要删除此房间吗？",
-    theme: "round-button",
   })
     .then(() => {
       roomStore.removeRoom(item.id);

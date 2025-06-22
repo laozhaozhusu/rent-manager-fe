@@ -1,57 +1,58 @@
 <template>
-  <div>
-    <List finished-text="没有更多了">
-      <SwipeCell v-for="item in rentRecords" :key="item.id">
-        <Cell
-          value-class="cell-value"
-          :title="`${item.roomCode} ${item.startDate}至${item.endDate}`"
-          :value="item.totalFee"
-          is-link
-          @click="handleDetail(item.id)"
-        >
-          <template #label>
-            <div>{{ formateElectricity(item) }}</div>
-            <div>{{ formateWater(item) }}</div>
-          </template>
-        </Cell>
-        <template #right>
-          <Button
-            square
-            type="danger"
-            text="删除"
-            @click="deleteItem(item.id)"
-          />
+  <Teleport to="#narBarLeft">
+    <Icon
+      name="arrow-left"
+      class="back-icon"
+      size="large"
+      @click.stop.prevent="$router.back()"
+    />
+  </Teleport>
+  <List finished-text="没有更多了" v-if="rentRecords.length > 0" inset>
+    <SwipeCell
+      v-for="item in rentRecords"
+      :key="item.id"
+      v-if="rentRecords.length > 0"
+    >
+      <Cell
+        value-class="cell-value"
+        :title="`${item.roomCode} ${item.startDate}至${item.endDate}`"
+        :value="item.totalFee"
+        is-link
+        @click="handleDetail(item.id)"
+      >
+        <template #label>
+          <div>{{ formateElectricity(item) }}</div>
+          <div>{{ formateWater(item) }}</div>
         </template>
-      </SwipeCell>
-    </List>
-    <ActionBar>
-      <ActionBarIcon
-        icon="plus"
-        v-if="selectedRoom?.status === ROOM_STATUS.AVAILABLE"
-        text="开始入住"
-        @click="checkInRoom"
-        color="#ee0a24"
-      />
-      <ActionBarIcon
-        icon="minus"
-        @click="checkOutRoom"
-        v-if="selectedRoom?.status === ROOM_STATUS.OCCUPIED"
-        text="退房"
-      />
+      </Cell>
+      <template #right>
+        <Button square type="danger" text="删除" @click="deleteItem(item.id)" />
+      </template>
+    </SwipeCell>
+  </List>
+  <Empty v-else description="暂无租赁记录" />
+  <ActionBar placeholder>
+    <ActionBarIcon
+      icon="plus"
+      v-if="selectedRoom?.status === ROOM_STATUS.AVAILABLE"
+      text="入住"
+      @click="checkInRoom"
+      color="#ee0a24"
+    />
+    <ActionBarIcon
+      icon="minus"
+      @click="checkOutRoom"
+      v-if="selectedRoom?.status === ROOM_STATUS.OCCUPIED"
+      text="退房"
+    />
 
-      <ActionBarButton
-        type="primary"
-        :disabled="selectedRoom?.status !== ROOM_STATUS.OCCUPIED"
-        to="/rent/add"
-        text="新增单据"
-      />
-      <!-- <ActionBarButton
-        type="primary"
-        :disabled="selectedRoom?.status !== ROOM_STATUS.OCCUPIED"
-        to="/rent/add"
-      /> -->
-    </ActionBar>
-  </div>
+    <ActionBarButton
+      type="primary"
+      :disabled="selectedRoom?.status !== ROOM_STATUS.OCCUPIED"
+      @click="handleAddRecord()"
+      text="新增单据"
+    />
+  </ActionBar>
 </template>
 
 <script setup lang="ts">
@@ -66,22 +67,27 @@ import {
   ActionBarIcon,
   ActionBarButton,
   showConfirmDialog,
+  Icon,
+  Empty,
 } from "vant";
 import { computed } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
+const route = useRoute();
 const router = useRouter();
 const roomStore = useRoomStore();
-const selectedRoom = computed(() => roomStore.selectedRoom);
+const roomId = route.params?.roomId as string;
+const selectedRoom = computed(() => {
+  return roomStore.getRoomById(roomId);
+});
 const rentStore = useRentStore();
 const rentRecords = computed(() => {
-  console.log(":::", rentStore.rentRecords);
-  return rentStore.rentRecords;
+  return rentStore.getRecordsByRoomId(roomId);
 });
 const formateElectricity = (item: RentalRecord): string => {
   // 计算电费
   const currentElectricity = parseFloat(item.currentElectricity) || 0;
-  const previousElectricity = parseFloat(item.PreviousElectricity) || 0;
+  const previousElectricity = parseFloat(item.previousElectricity) || 0;
   const unitPriceElectricity = parseFloat(item.electricityPrice) || 0;
 
   // 实用电量
@@ -93,7 +99,7 @@ const formateElectricity = (item: RentalRecord): string => {
 const formateWater = (item: RentalRecord): string => {
   // 计算水费
   const currentWater = parseFloat(item.currentWater) || 0;
-  const previousWater = parseFloat(item.PreviousWater) || 0;
+  const previousWater = parseFloat(item.previousWater) || 0;
   const unitPriceWater = parseFloat(item.waterPrice) || 0;
 
   // 实用水量
@@ -107,7 +113,6 @@ const deleteItem = (id: string) => {
   showConfirmDialog({
     title: "提示",
     message: "确定要删除此记录吗？",
-    theme: "round-button",
   })
     .then(() => {
       rentStore.removeRecord(id);
@@ -117,19 +122,24 @@ const deleteItem = (id: string) => {
     });
 };
 const checkInRoom = () => {
-  if (selectedRoom.value.status === ROOM_STATUS.AVAILABLE) {
-    roomStore.checkInRoom();
+  if (selectedRoom.value?.status === ROOM_STATUS.AVAILABLE) {
+    roomStore.checkInRoom(roomId);
   }
 };
 const checkOutRoom = () => {
-  if (selectedRoom.value.status === ROOM_STATUS.OCCUPIED) {
-    roomStore.checkOutRoom();
+  if (selectedRoom.value?.status === ROOM_STATUS.OCCUPIED) {
+    roomStore.checkOutRoom(roomId);
   }
 };
 
-const handleDetail = (id: string) => {
-  rentStore.selectRecord(id);
-  router.push({ path: "/rent/add", query: { readonly: 1 } });
+const handleAddRecord = () => {
+  router.push({ path: `/rent/add`, query: { type: "add", roomId } });
+};
+const handleDetail = (rentId: string) => {
+  router.push({
+    path: `/rent/detail/${rentId}`,
+    query: { type: "detail", roomId },
+  });
 };
 </script>
 

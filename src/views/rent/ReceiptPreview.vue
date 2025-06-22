@@ -1,76 +1,151 @@
 <template>
-  <div class="preview-container">
-    <!-- <div v-if="imageUrl" class="mt-4">
-      <Image :src="imageUrl" alt="截图" />
-    </div> -->
-    <!-- <RentReceipt :data="receiptData" /> -->
-
-    <div ref="receiptRef" class="receipt-content">
-      <RentReceipt :data="receiptData" />
+  <Teleport to="#narBarLeft">
+    <Icon
+      name="arrow-left"
+      class="back-icon"
+      @click.stop.prevent="$router.back()"
+    />
+  </Teleport>
+  <Image
+    width="100%"
+    :src="imageUrl"
+    v-if="imageUrl"
+    @click="
+      () => {
+        showImagePreview([imageUrl!]);
+      }
+    "
+  />
+  <div v-else style="width: 100%; overflow-x: scroll">
+    <div
+      ref="receiptRef"
+      class="receipt-content"
+      :class="isGenerate ? 'is-generate' : ''"
+    >
+      <weiTemplate :data="receiptData" v-if="!!receiptData" />
     </div>
-
-    <ActionBar>
-      <ActionBarButton type="primary" @click="handleShare" text="分享图片" />
-      <ActionBarButton type="primary" @click="downloadImage" text="保存图片" />
-    </ActionBar>
-
-    <van-toast id="toast" />
   </div>
+
+  <ActionBar placeholder>
+    <ActionBarButton type="primary" @click="handleShare" text="分享图片" />
+    <ActionBarButton type="primary" @click="downloadImage" text="保存图片" />
+  </ActionBar>
+
+  <van-toast id="toast" />
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import RentReceipt from "@/components/RentTemplate/index.vue"; // 复用的收据组件
+import { computed, watch, ref, nextTick } from "vue";
+// import RentReceipt from "@/components/RentTemplate/index.vue"; // 复用的收据组件
+import weiTemplate from "@/components/RentTemplate/weiTemplate.vue"; // 复用的收据组件
 import html2canvas from "html2canvas";
-import { Image, ActionBar, ActionBarButton } from "vant";
+import {
+  ActionBar,
+  ActionBarButton,
+  Icon,
+  Image,
+  showImagePreview,
+  showNotify,
+} from "vant";
 import { useRentStore } from "@/store/rentStore";
+import { Share } from "@capacitor/share";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { useRoute } from "vue-router";
+import { Capacitor } from "@capacitor/core";
 
-const receiptRef = ref<HTMLElement | null>(null);
-const imageUrl = ref<string | null>(null);
+const route = useRoute();
+const rentId = route.params?.rentId as string;
 
+const receiptRef = ref<HTMLElement>();
+const imageUrl = ref<string>();
 const rentStore = useRentStore();
-const receiptData = computed(() => rentStore.selectedRecord || null);
+const receiptData = computed(() => rentStore.getRecordById(rentId) || null);
+const isGenerate = ref(false);
 
 // 分享功能（复制链接或跳转小程序等）
 const handleGenerate = async () => {
-  if (!receiptRef.value) return;
-  const canvas = await html2canvas(receiptRef.value);
-  imageUrl.value = canvas.toDataURL("image/png");
+  if (!receiptRef.value || imageUrl.value) return;
+  isGenerate.value = true;
+
+  nextTick(async () => {
+    await html2canvas(receiptRef.value!, {
+      useCORS: true,
+      allowTaint: false,
+      width: 1200,
+      scale: 1,
+    })
+      .then((canvas) => {
+        imageUrl.value = canvas.toDataURL("image/png");
+      })
+      .catch((error) => {
+        console.log(error);
+      })
+      .finally(() => {
+        isGenerate.value = false;
+      });
+  });
 };
+const fileName = computed(() => {
+  return `${receiptData.value?.roomCode}号房_${receiptData.value?.endDate}_收据.png`;
+});
 
 const handleShare = async () => {
-  if (!navigator.canShare || !imageUrl.value) {
-    alert("当前浏览器不支持分享");
-    return;
-  }
-
-  const res = await fetch(imageUrl.value);
-  const blob = await res.blob();
-  const file = new File([blob], "receipt.png", { type: "image/png" });
+  await handleGenerate();
 
   try {
-    await navigator.share({
-      files: [file],
-      title: "租金收据",
-      text: "请查收租金收据",
+    await Filesystem.writeFile({
+      path: fileName.value,
+      data: imageUrl.value!.split(",")[1], // 只保留base64数据部分
+      directory: Directory.Cache,
     });
-  } catch (err) {
-    console.error("分享失败", err);
+
+    const fileUri = await Filesystem.getUri({
+      directory: Directory.Cache,
+      path: fileName.value,
+    });
+
+    await Share.share({
+      title: `${receiptData.value?.roomCode}租金收据`,
+      text: "租金收据信息",
+      url: fileUri.uri,
+      dialogTitle: "分享截图",
+    });
+  } catch (e) {
+    alert("分享失败，请稍后再试");
+    console.error("分享失败", e);
   }
 };
 
 const downloadImage = async () => {
-  // 自动下载图片
-  const link = document.createElement("a");
-  link.href = imageUrl.value;
-  link.download = `${receiptData.value.roomCode}号房${receiptData.value.startDate}-${receiptData.value.endDate}收据.png`;
-  link.click();
-};
-onMounted(() => {
-  if (receiptRef.value) {
-    handleGenerate();
+  await handleGenerate();
+
+  if (Capacitor.getPlatform() === "web") {
+    const link = document.createElement("a");
+    link.href = imageUrl.value!;
+    link.download = fileName.value;
+    link.click();
+  } else {
+    await Filesystem.writeFile({
+      path: fileName.value,
+      data: imageUrl.value!.split(",")[1], // 只保留base64数据部分
+      directory: Directory.Documents,
+      recursive: true,
+    })
+      .then(() => {
+        showNotify({ type: "success", message: "保存成功" });
+      })
+      .catch(() => {
+        showNotify({ type: "danger", message: "保存失败" });
+      });
   }
-});
+};
+
+watch(
+  [() => receiptRef.value, () => receiptData.value],
+  ([newVal, newData]) => {
+    newVal && newData && nextTick(handleGenerate);
+  }
+);
 </script>
 
 <style scoped>
@@ -90,5 +165,9 @@ onMounted(() => {
 
 .action-buttons {
   margin-top: 24px;
+}
+.is-generate {
+  width: 1200px;
+  overflow-x: auto;
 }
 </style>

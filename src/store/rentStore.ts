@@ -9,10 +9,10 @@ export type RentalRecord = {
   roomCode: string; // 房间号
   startDate: string;
   endDate: string;
-  PreviousElectricity: string; // 上月电表读数
+  previousElectricity: string; // 上月电表读数
   currentElectricity: string; // 当前电表读数
   electricityPrice: string; //电价
-  PreviousWater: string; // 上月水表读数
+  previousWater: string; // 上月水表读数
   currentWater: string; // 当前水表读数
   waterPrice: string; // 水价
   monthlyRent: string; // 房租
@@ -23,63 +23,67 @@ export type RentalRecord = {
   otherFee: string; // 其他费用
   totalFee: string; // 合计金额
   operateTime: string; // 操作时间
+  payee: string; // 收款人
 };
 
 type RentState = {
   records: RentalRecord[];
-  selectedRecordId: string; // 当前选中的记录ID
 };
 
 export const useRentStore = defineStore("rental", {
   state: (): RentState => ({
     records: [],
-    selectedRecordId: "", // 当前选中的记录ID
   }),
 
   getters: {
-    rentRecords: (state) => {
-      const roomStore = useRoomStore();
-      const roomId = roomStore.selectedRoomId;
-
-      return state.records.filter((r) => r.roomId === roomId);
+    getRecordsByRoomId: (state) => {
+      return (roomId: string): RentalRecord[] => {
+        return state.records.filter((r) => r.roomId === roomId);
+      };
     },
-    latestRentRecord: (state) => {
-      const roomStore = useRoomStore();
-      const roomId = roomStore.selectedRoomId;
-
-      return state.records
-        .filter((r) => r.roomId === roomId)
-        .sort((a, b) => {
-          return (
-            new Date(a.operateTime).getTime() -
-            new Date(b.operateTime).getTime()
-          );
-        })?.[0];
+    getLatestRecordByRoomId: (state) => {
+      return (roomId: string) => {
+        return state.records
+          .filter((r) => r.roomId === roomId)
+          .sort((a, b) => {
+            return (
+              new Date(b.operateTime).getTime() -
+              new Date(a.operateTime).getTime()
+            );
+          })?.[0];
+      };
     },
-    selectedRecord: (state) => {
-      return state.records.find((r) => r.id === state.selectedRecordId);
+    getRecordById: (state) => {
+      return (id: string): RentalRecord | undefined => {
+        return state.records.find((r) => r.id === id);
+      };
     },
   },
 
   actions: {
-    selectRecord(id: string) {
-      if (!this.records.some((r) => r.id === id)) {
-        console.warn(`Record with id ${id} does not exist`);
-      }
-      this.selectedRecordId = id;
-    },
     addRecord(
-      record: Omit<RentalRecord, "id" | "roomId" | "roomCode" | "operateTime">
-    ) {
-      const id = uuidv4();
+      record: Omit<RentalRecord, "id" | "roomCode" | "operateTime">
+    ): string {
       const roomStore = useRoomStore();
-      const roomId = roomStore.selectedRoomId;
-      const roomCode = roomStore.selectedRoom?.code || "";
+
+      const id = uuidv4();
+      const roomCode = roomStore.getRoomById(record.roomId)?.code || "";
       const operateTime = dayjs().format("YYYY-MM-DD HH:mm:ss");
-      this.records.push({ ...record, id, roomId, operateTime, roomCode });
+      this.records.push({ ...record, id, operateTime, roomCode });
+      return id;
     },
     removeRecord(id: string) {
       this.records = this.records.filter((r) => r.id !== id);
+    },
+    removeRecordByRoom(roomId: string) {
+      this.records = this.records.filter((r) => r.roomId !== roomId);
+    },
+    syncByPraent() {
+      const roomStore = useRoomStore();
+
+      this.records = this.records.filter((r) =>
+        roomStore.roomIds.includes(r.roomId)
+      );
     },
   },
 });

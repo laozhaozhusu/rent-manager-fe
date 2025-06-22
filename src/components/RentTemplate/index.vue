@@ -21,7 +21,7 @@
         <tr>
           <td>
             <div>上月电表读数</div>
-            <div>{{ data.PreviousElectricity }}</div>
+            <div>{{ data.previousElectricity }}</div>
           </td>
           <td>
             <div>本月电表读数</div>
@@ -45,7 +45,7 @@
         <tr>
           <td>
             <div>上月水表读数</div>
-            <div>{{ data.PreviousWater }}</div>
+            <div>{{ data.previousWater }}</div>
           </td>
           <td>
             <div>本月水表读数</div>
@@ -95,7 +95,7 @@
           </td>
         </tr>
         <tr>
-          <td height="40px" colspan="2">收款人：</td>
+          <td height="40px" colspan="2">收款人：{{ data.payee }}</td>
         </tr>
       </tbody>
     </table>
@@ -121,7 +121,7 @@ const props = defineProps<{
 const electricityUsed = computed(() =>
   (
     parseFloat(props.data.currentElectricity) -
-    parseFloat(props.data.PreviousElectricity)
+    parseFloat(props.data.previousElectricity)
   ).toFixed(2)
 );
 const electricityAmount = computed(() =>
@@ -132,7 +132,7 @@ const electricityAmount = computed(() =>
 
 const waterUsed = computed(() =>
   (
-    parseFloat(props.data.currentWater) - parseFloat(props.data.PreviousWater)
+    parseFloat(props.data.currentWater) - parseFloat(props.data.previousWater)
   ).toFixed(2)
 );
 const waterAmount = computed(() =>

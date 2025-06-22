@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { v4 as uuidv4 } from "uuid";
+import { useRoomStore } from "./roomStore";
 
 export type Building = {
   id: string;
@@ -8,23 +9,21 @@ export type Building = {
 
 type BuildingState = {
   buildings: Building[];
-  selectedBuildingId: string;
 };
 
 export const useBuildingStore = defineStore("building", {
   state: (): BuildingState => ({
     buildings: [],
-    selectedBuildingId: "",
   }),
 
   getters: {
     buildingList(state): Building[] {
       return state.buildings;
     },
-    selectedBuilding(state): Building | null {
-      return (
-        state.buildings.find((b) => b.id === state.selectedBuildingId) || null
-      );
+    buildingIds(state): string[] {
+      return state.buildings.map((item) => {
+        return item.id;
+      });
     },
   },
 
@@ -34,20 +33,10 @@ export const useBuildingStore = defineStore("building", {
       this.buildings.push({ ...building, id });
     },
     removeBuilding(id: string) {
+      const roomStore = useRoomStore();
       this.buildings = this.buildings.filter((b) => b.id !== id);
-      if (this.selectedBuildingId === id) {
-        this.selectedBuildingId = null;
-      }
-    },
-    selectBuilding(id: string) {
-      const exists = this.buildings.some((b) => b.id === id);
-      if (exists) {
-        this.selectedBuildingId = id;
-        return true;
-      } else {
-        console.warn(`[selectBuilding] 无效的楼栋ID: ${id}`);
-        return false;
-      }
+
+      roomStore.syncByPraent();
     },
   },
 });
